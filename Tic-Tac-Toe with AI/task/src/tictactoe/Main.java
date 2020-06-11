@@ -1,7 +1,7 @@
 package tictactoe;
 
-import java.util.ArrayList;
-import java.util.Scanner;
+import javax.swing.plaf.synth.SynthMenuBarUI;
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
 class Coordinate {
@@ -217,17 +217,87 @@ class MediumLevelAlg extends EasyLevelAlg {
 }
 
 class HardLevelAlg extends MediumLevelAlg {
+    static final Map<Character, Character> flippedSymbol = Map.of('X','O','O','X');
     @Override
     Coordinate selectMove(Board board) {
-        return super.selectMove(board);
+        return getBestMove(board);
     }
 
-    int minimax(Board board, int currentTurn) {return 0;}
+    Coordinate getBestMove(Board board) {
+        ArrayList<Coordinate> candidateMoves = findEmptySpaces(board);
+        Coordinate bestMove = null;
+        int highestScore = Integer.MIN_VALUE;
+
+        for (int i = 0; i < candidateMoves.size(); i++) {
+            int currentScore = minimaxAlg(board, candidateMoves.get(i), board.getCurrentSymbol(), true);
+            if (currentScore > highestScore) {
+                highestScore = currentScore;
+                bestMove = candidateMoves.get(i);
+            }
+        }
+
+        return bestMove;
+    }
+
+    private int minimaxAlg(Board board, Coordinate move, char symbolToWin, boolean isOpponentTurn) {
+        char lastTurnSymbol = isOpponentTurn ? symbolToWin : flippedSymbol.get(symbolToWin);
+        int score;
+
+        // make the move
+        String oldBoard = board.convertToDataStr();
+        Board newBoard = new Board(board.SIZE, updatedDataStr(move, oldBoard, lastTurnSymbol));
+
+        // check if game is won
+        newBoard.checkState();
+        if (newBoard.isGameOver()) {
+            if (newBoard.currentState.contains(String.valueOf(symbolToWin))) {
+                score = 1;
+            }
+            else if (newBoard.currentState.contains("Draw")) {
+                score = 0;
+            }
+            else {
+                score = -1;
+            }
+            return score;
+        }
+
+        // Get available moves
+        ArrayList<Coordinate> availableMoves = findEmptySpaces(newBoard);
+
+        // calculate scores
+        if (isOpponentTurn) {
+            ArrayList<Integer> listOfScores = new ArrayList<>();
+            score = Integer.MAX_VALUE;
+            listOfScores.add(score);
+            for (Coordinate nextMove : availableMoves) {
+                listOfScores.add(minimaxAlg(newBoard, nextMove, symbolToWin, false));
+            }
+            score = Collections.min(listOfScores);
+        }
+        else {
+            ArrayList<Integer> listOfScores = new ArrayList<>();
+            score = Integer.MIN_VALUE;
+            listOfScores.add(score);
+            for (Coordinate nextMove : availableMoves) {
+                listOfScores.add(minimaxAlg(newBoard, nextMove, symbolToWin, true));
+            }
+            score = Collections.max(listOfScores);
+        }
+        return score;
+    }
+
+    private String updatedDataStr(Coordinate move, String dataStr, char symbol) {
+        int row = move.row;
+        int col = move.col;
+        return dataStr.substring(0, row*3+col) + symbol + dataStr.substring(row*3+col+1);
+    }
+
 }
 
 class Board {
     final int SIZE;
-    final String initialBoard;
+    String dataStr;
     char[][] dataArr;
     String currentState = "Game not finished";
     int currentTurn = 0;
@@ -235,9 +305,19 @@ class Board {
 
     public Board(int size, String field) {
         SIZE = size;
-        initialBoard = field;
+        dataStr = field;
         fillDataArr();
         calculateCurrentTurn();
+    }
+
+    public String convertToDataStr() {
+        StringBuilder sb = new StringBuilder();
+        for (char[] row : dataArr) {
+            for (char col : row) {
+                sb.append(col);
+            }
+        }
+        return sb.toString();
     }
 
     public int getCurrentTurn() {
@@ -249,15 +329,15 @@ class Board {
     }
 
     private void calculateCurrentTurn() {
-        for (char c : initialBoard.toCharArray()) {
+        for (char c : dataStr.toCharArray()) {
             if (c != '_') currentTurn++;
         }
     }
 
     private void fillDataArr() {
         dataArr =  new char[SIZE][SIZE];
-        for (int i = 0; i < initialBoard.length(); i++ ) {
-            char c = initialBoard.charAt(i);
+        for (int i = 0; i < dataStr.length(); i++ ) {
+            char c = dataStr.charAt(i);
             dataArr[(i / 3)][(i % 3)] = c;
         }
     }
@@ -321,7 +401,7 @@ class Board {
         return false;
     }
 
-    private void checkState() {
+    void checkState() {
         if (!(checkRow() || checkCol() || checkDiagonal())) {
             if (isFullBoard()) {
                 currentState = "Draw";
